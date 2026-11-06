@@ -1,11 +1,18 @@
-import electronLogo from './assets/electron.svg'
+import { useEffect, useState } from 'react'
 
 function App(): React.JSX.Element {
-  const ipcHandle = (): void => window.electron.ipcRenderer.send('ping')
+  const [device_Id, setDeviceId] = useState()
 
+  useEffect(() => {
+    const random_device = Math.random()
+    // setDeviceId(random_device)
+  })
+  
   return (
     <>
-      <h1>Duckdesk</h1>
+      <h1>Device Id</h1>
+      <input type="text" value={device_Id}  />
+      <button>connect</button>
     </>
   )
 }
