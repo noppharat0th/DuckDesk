@@ -2,13 +2,18 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { windowChrome } from '../shared/window-chrome'
+import { getOrCreateDevice } from './device'
 
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 900,
+    width: 1080,
     height: 670,
     show: false,
+    backgroundColor: '#f8fafc',
+    titleBarStyle: 'hidden' as const,
+    titleBarOverlay: windowChrome,
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
@@ -51,6 +56,11 @@ app.whenReady().then(() => {
 
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
+
+  // ดึง Device ID ของเครื่องนี้ไปให้ Renderer
+  ipcMain.handle('get-my-device', async () => {
+    return await getOrCreateDevice()
+  })
 
   createWindow()
 

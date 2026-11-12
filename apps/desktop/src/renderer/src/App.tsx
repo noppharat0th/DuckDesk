@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react'
+import DevicePage from './components/DevicePage'
 
 function App(): React.JSX.Element {
-  const [device_Id, setDeviceId] = useState()
+  const [deviceId, setDeviceId] = useState('')
 
   useEffect(() => {
-    const random_device = Math.random()
-    // setDeviceId(random_device)
-  })
-  
+    window.api.getMyDevice().then((device) => {
+      setDeviceId(device.deviceId)
+    }).catch(() => {
+      setDeviceId('Error Loading Device Id')
+    })
+  }, [])
+
   return (
     <>
-      <h1>Device Id</h1>
-      <input type="text" value={device_Id}  />
-      <button>connect</button>
+      <h1>Your Device</h1>
+      <DevicePage deviceId={deviceId} />
     </>
   )
 }
