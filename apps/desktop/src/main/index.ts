@@ -1,17 +1,39 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, session, desktopCapturer, screen } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { windowChrome } from '../shared/window-chrome'
 import { getOrCreateDevice } from './device'
+// import { mouseMove, mouseClick, mouseScroll, keyPress, typeText } from './input'
+
+
 
 function createWindow(): void {
-  // Create the browser window.
+  // เปิดสิทธิ์ให้ Renderer ใช้ navigator.mediaDevices.getDisplayMedia ดึงหน้าจอได้ทันที
+  session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
+    desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
+      if (sources && sources.length > 0) {
+        callback({ video: sources[0] })
+      } else {
+        callback({})
+      }
+    }).catch((err) => {
+      console.error('Error in setDisplayMediaRequestHandler:', err)
+      callback({})
+    })
+  })
+
+  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(true)
+  })
+
   const mainWindow = new BrowserWindow({
-    width: 1080,
-    height: 670,
+    width: 1060,
+    height: 700,
+    minWidth: 820,
+    minHeight: 580,
     show: false,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f0f0f0',
     titleBarStyle: 'hidden' as const,
     titleBarOverlay: windowChrome,
     autoHideMenuBar: true,
@@ -26,13 +48,18 @@ function createWindow(): void {
     mainWindow.show()
   })
 
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.key === 'F12') {
+      mainWindow.webContents.toggleDevTools()
+      event.preventDefault()
+    }
+  })
+
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
 
-  // HMR for renderer base on electron-vite cli.
-  // Load the remote URL for development or the local html file for production.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -40,45 +67,40 @@ function createWindow(): void {
   }
 }
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
-  // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
 
-  // Default open or close DevTools by F12 in development
-  // and ignore CommandOrControl + R in production.
-  // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // IPC test
   ipcMain.on('ping', () => console.log('pong'))
 
-  // ดึง Device ID ของเครื่องนี้ไปให้ Renderer
   ipcMain.handle('get-my-device', async () => {
     return await getOrCreateDevice()
+  })
+
+  ipcMain.handle('get-screen-sources', async () => {
+    const sources = await desktopCapturer.getSources({ types: ['screen'] })
+    return sources.map((s) => ({ id: s.id, name: s.name }))
+  })
+
+  // ---- Remote Control IPC Handlers ----
+
+  ipcMain.handle('get-screen-resolution', () => {
+    const primary = screen.getPrimaryDisplay()
+    return { width: primary.size.width, height: primary.size.height }
   })
 
   createWindow()
 
   app.on('activate', function () {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
 })
-
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.

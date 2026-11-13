@@ -1,14 +1,23 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
-// Custom APIs for renderer
 const api = {
-  getMyDevice: () => ipcRenderer.invoke('get-my-device')
+  getMyDevice: () => ipcRenderer.invoke('get-my-device'),
+  getScreenSources: () => ipcRenderer.invoke('get-screen-sources'),
+  getScreenResolution: (): Promise<{ width: number; height: number }> =>
+    ipcRenderer.invoke('get-screen-resolution'),
+  remoteMouseMove: (data: { x: number; y: number }) =>
+    ipcRenderer.invoke('remote-mouse-move', data),
+  remoteMouseClick: (data: { button: 'left' | 'right' | 'middle'; double?: boolean }) =>
+    ipcRenderer.invoke('remote-mouse-click', data),
+  remoteMouseScroll: (data: { deltaY: number }) =>
+    ipcRenderer.invoke('remote-mouse-scroll', data),
+  remoteKeyPress: (data: { key: string; modifiers?: string[] }) =>
+    ipcRenderer.invoke('remote-key-press', data),
+  remoteTypeText: (data: { text: string }) =>
+    ipcRenderer.invoke('remote-type-text', data),
 }
 
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)
@@ -17,8 +26,8 @@ if (process.contextIsolated) {
     console.error(error)
   }
 } else {
-  // @ts-ignore (define in dts)
+  // @ts-ignore
   window.electron = electronAPI
-  // @ts-ignore (define in dts)
+  // @ts-ignore
   window.api = api
 }

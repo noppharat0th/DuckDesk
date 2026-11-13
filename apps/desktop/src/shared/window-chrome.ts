@@ -1,7 +1,6 @@
 // Custom title bar overlay style for Windows
 export const windowChrome = {
-  color: '#f8fafc',
-  symbolColor: '#0f172a',
+  color: '#ffffff',
+  symbolColor: '#374151',
   height: 40
 }
-
