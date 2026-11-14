@@ -1,4 +1,3 @@
-
 import { socket } from './socket'
 
 const RTC_CONFIG: RTCConfiguration = {
@@ -13,21 +12,25 @@ const RTC_CONFIG: RTCConfiguration = {
 
 export async function captureScreen(): Promise<MediaStream> {
   try {
-    const stream = await navigator.mediaDevices.getDisplayMedia({
+    return await navigator.mediaDevices.getDisplayMedia({
       video: {
         frameRate: { ideal: 30, max: 30 }
       },
       audio: false
     })
-    return stream
-  } catch (err) {
+  } catch {
+    // Fall through to the desktopCapturer-based fallback below.
   }
 
   const sources = await window.api.getScreenSources()
   const source = sources[0]
   if (!source) throw new Error('No screen source found')
 
-  return await (navigator.mediaDevices as any).getUserMedia({
+  const mediaDevices = navigator.mediaDevices as MediaDevices & {
+    getUserMedia(constraints: MediaStreamConstraints): Promise<MediaStream>
+  }
+
+  return await mediaDevices.getUserMedia({
     audio: false,
     video: {
       mandatory: {
@@ -36,7 +39,7 @@ export async function captureScreen(): Promise<MediaStream> {
         maxFrameRate: 30
       }
     }
-  })
+  } as unknown as MediaStreamConstraints)
 }
 
 export type InputEvent =
@@ -62,45 +65,50 @@ class WebRTCManager {
   public onInputEvent?: (event: InputEvent) => void
   public hostResolution: { width: number; height: number } = { width: 1920, height: 1080 }
 
-  init(
-    onRemoteStream: (stream: MediaStream) => void,
-    onDisconnect: () => void
-  ) {
+  init(onRemoteStream: (stream: MediaStream) => void, onDisconnect: () => void): void {
     this.onRemoteStreamCallback = onRemoteStream
     this.onDisconnectCallback = onDisconnect
   }
 
-  private setupDataChannel(dc: RTCDataChannel) {
+  private setupDataChannel(dc: RTCDataChannel): void {
     this.dataChannel = dc
     dc.onmessage = (event) => {
       try {
         const msg: InputEvent = JSON.parse(event.data)
         this.onInputEvent?.(msg)
-      } catch { }
+      } catch {
+        // Ignore malformed input events from a remote peer.
+      }
     }
-    dc.onopen = () => { }
-    dc.onclose = () => { }
+    dc.onopen = () => {
+      // Channel is ready; input can flow.
+    }
+    dc.onclose = () => {
+      // Connection state watcher owns teardown.
+    }
   }
 
-  sendInput(event: InputEvent) {
+  sendInput(event: InputEvent): void {
     if (this.dataChannel?.readyState === 'open') {
       this.dataChannel.send(JSON.stringify(event))
     }
   }
 
-  private async drainCandidates() {
+  private async drainCandidates(): Promise<void> {
     if (!this.peer || !this.peer.remoteDescription) return
     while (this.candidateQueue.length > 0) {
       const candidateInit = this.candidateQueue.shift()
       if (candidateInit) {
         try {
           await this.peer.addIceCandidate(new RTCIceCandidate(candidateInit))
-        } catch { }
+        } catch {
+          // A stale ICE candidate is harmless; continue draining.
+        }
       }
     }
   }
 
-  private watchConnection(peer: RTCPeerConnection, label: string) {
+  private watchConnection(peer: RTCPeerConnection): void {
     peer.onconnectionstatechange = () => {
       if (this.peer !== peer) return
       const state = peer.connectionState
@@ -118,7 +126,7 @@ class WebRTCManager {
     }
   }
 
-  private async tuneVideoSender(peer: RTCPeerConnection) {
+  private async tuneVideoSender(peer: RTCPeerConnection): Promise<void> {
     const sender = peer.getSenders().find((s) => s.track?.kind === 'video')
     if (!sender) return
     try {
@@ -127,10 +135,12 @@ class WebRTCManager {
       params.encodings[0].maxBitrate = 4_000_000
       params.encodings[0].maxFramerate = 30
       await sender.setParameters(params)
-    } catch { }
+    } catch {
+      // Sender tuning is best-effort; the stream still works without it.
+    }
   }
 
-  async startCalling(targetId: string) {
+  async startCalling(targetId: string): Promise<void> {
     this.close(false)
 
     const peer = new RTCPeerConnection(RTC_CONFIG)
@@ -158,7 +168,7 @@ class WebRTCManager {
       }
     }
 
-    this.watchConnection(peer, 'Client')
+    this.watchConnection(peer)
 
     const offer = await peer.createOffer()
     await peer.setLocalDescription(offer)
@@ -169,14 +179,17 @@ class WebRTCManager {
     })
   }
 
-  async handleOfferAndSendAnswer(fromId: string, offerSdp: RTCSessionDescriptionInit) {
+  async handleOfferAndSendAnswer(
+    fromId: string,
+    offerSdp: RTCSessionDescriptionInit
+  ): Promise<void> {
     this.close(false)
 
     const stream = await captureScreen()
     this.localStream = stream
 
-    stream.getVideoTracks().forEach((t) => {
-      t.contentHint = 'detail'
+    stream.getVideoTracks().forEach((track) => {
+      track.contentHint = 'detail'
     })
 
     const peer = new RTCPeerConnection(RTC_CONFIG)
@@ -184,15 +197,17 @@ class WebRTCManager {
 
     peer.ondatachannel = (event) => {
       this.setupDataChannel(event.channel)
-      window.api.getScreenResolution().then((res) => {
-        this.hostResolution = res
+      window.api.getScreenResolution().then((resolution) => {
+        this.hostResolution = resolution
         setTimeout(() => {
           if (this.dataChannel?.readyState === 'open') {
-            this.dataChannel.send(JSON.stringify({
-              type: 'screen-resolution',
-              width: res.width,
-              height: res.height
-            }))
+            this.dataChannel.send(
+              JSON.stringify({
+                type: 'screen-resolution',
+                width: resolution.width,
+                height: resolution.height
+              })
+            )
           }
         }, 300)
       })
@@ -207,7 +222,7 @@ class WebRTCManager {
       }
     }
 
-    this.watchConnection(peer, 'Host')
+    this.watchConnection(peer)
 
     await peer.setRemoteDescription(new RTCSessionDescription(offerSdp))
     await this.drainCandidates()
@@ -227,13 +242,13 @@ class WebRTCManager {
     })
   }
 
-  async handleAnswer(answerSdp: RTCSessionDescriptionInit) {
+  async handleAnswer(answerSdp: RTCSessionDescriptionInit): Promise<void> {
     if (!this.peer) return
     await this.peer.setRemoteDescription(new RTCSessionDescription(answerSdp))
     await this.drainCandidates()
   }
 
-  async handleCandidate(candidateInit: RTCIceCandidateInit) {
+  async handleCandidate(candidateInit: RTCIceCandidateInit): Promise<void> {
     if (!this.peer || !this.peer.remoteDescription) {
       this.candidateQueue.push(candidateInit)
       return
@@ -241,14 +256,16 @@ class WebRTCManager {
 
     try {
       await this.peer.addIceCandidate(new RTCIceCandidate(candidateInit))
-    } catch { }
+    } catch {
+      // Ignore invalid remote candidates; ICE will retry.
+    }
   }
 
-  close(notify = true) {
+  close(notify = true): void {
     clearTimeout(this.dropTimer)
     this.dropTimer = undefined
     this.candidateQueue = []
-    this.localStream?.getTracks().forEach((t) => t.stop())
+    this.localStream?.getTracks().forEach((track) => track.stop())
     this.localStream = null
     this.dataChannel?.close()
     this.dataChannel = null
@@ -257,7 +274,7 @@ class WebRTCManager {
     if (notify) this.onDisconnectCallback?.()
   }
 
-  getLocalStream() {
+  getLocalStream(): MediaStream | null {
     return this.localStream
   }
 }

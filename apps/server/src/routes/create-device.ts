@@ -8,4 +8,4 @@ export const createDeviceRoute: FastifyPluginAsync = async(server) => {
         const device_id = await createDeviceId(publicKey)
         return device_id
     })
-}
+}   

@@ -1,24 +1,60 @@
 import { WSS_URL } from '../config'
 
-type SignalCallback = (fromId: string, payload: any) => void
+export interface SignalingPayload {
+  action:
+    | 'request-connect'
+    | 'accept-connect'
+    | 'reject-connect'
+    | 'webrtc-offer'
+    | 'webrtc-answer'
+    | 'webrtc-candidate'
+    | 'disconnect'
+  sdp?: RTCSessionDescriptionInit
+  candidate?: RTCIceCandidateInit
+}
+
+type SignalCallback = (fromId: string, payload: SignalingPayload) => void
 type StatusCallback = (isConnected: boolean, host?: string) => void
+type ErrorCallback = (message: string) => void
+
+interface SignalingMessage {
+  type?: 'register' | 'signal' | 'error'
+  fromId?: string
+  payload?: SignalingPayload
+  message?: string
+}
+
+type OutgoingMessage =
+  | { type: 'register'; deviceId: string }
+  | { type: 'signal'; targetId: string; payload: SignalingPayload }
 
 class SignalingService {
   private ws: WebSocket | null = null
-  private deviceId: string = ''
+  private deviceId = ''
   private onSignal?: SignalCallback
   private onStatusChange?: StatusCallback
-  private reconnectTimer: any = null
+  private onError?: ErrorCallback
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
-  connect(deviceId: string, onSignal?: SignalCallback, onStatusChange?: StatusCallback) {
+  connect(
+    deviceId: string,
+    onSignal?: SignalCallback,
+    onStatusChange?: StatusCallback,
+    onError?: ErrorCallback
+  ): void {
     this.deviceId = deviceId
     this.onSignal = onSignal
     this.onStatusChange = onStatusChange
+    this.onError = onError
     this.initSocket()
   }
 
-  private initSocket() {
-    clearTimeout(this.reconnectTimer)
+  private initSocket(): void {
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+
     if (this.ws) {
       this.ws.onopen = null
       this.ws.onclose = null
@@ -27,7 +63,6 @@ class SignalingService {
       this.ws.close()
       this.ws = null
     }
-
 
     try {
       const ws = new WebSocket(WSS_URL)
@@ -40,48 +75,54 @@ class SignalingService {
 
       ws.onmessage = (event) => {
         try {
-          const data = JSON.parse(event.data)
-          if (data.type === 'signal') {
-            this.onSignal?.(data.fromId, data.payload)
-          } else if (data.type === 'error') {
-            alert(data.message)
+          const message = JSON.parse(String(event.data)) as SignalingMessage
+
+          if (message.type === 'signal' && message.fromId && message.payload) {
+            this.onSignal?.(message.fromId, message.payload)
+            return
           }
-        } catch (err) {
-          console.error('Socket message parse error:', err)
+
+          if (message.type === 'error') {
+            const errorMessage = message.message ?? 'The signaling server reported an error.'
+            if (this.onError) this.onError(errorMessage)
+            else console.error('[Signaling]', errorMessage)
+          }
+        } catch (error) {
+          console.error('Socket message parse error:', error)
         }
       }
 
-      ws.onerror = (err) => {
-        console.error('WebSocket Error:', err)
+      ws.onerror = (event) => {
+        console.error('WebSocket error:', event)
       }
 
       ws.onclose = () => {
         this.onStatusChange?.(false)
         this.reconnectTimer = setTimeout(() => this.initSocket(), 2000)
       }
-    } catch (err) {
-      console.error('WebSocket exception:', err)
+    } catch (error) {
+      console.error('WebSocket exception:', error)
       this.onStatusChange?.(false)
       this.reconnectTimer = setTimeout(() => this.initSocket(), 2000)
     }
   }
 
-  sendSignal(targetId: string, payload: any) {
-    this.send({
-      type: 'signal',
-      targetId,
-      payload
-    })
+  sendSignal(targetId: string, payload: SignalingPayload): void {
+    this.send({ type: 'signal', targetId, payload })
   }
 
-  private send(data: any) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(data))
+  private send(message: OutgoingMessage): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(message))
     }
   }
 
-  disconnect() {
-    clearTimeout(this.reconnectTimer)
+  disconnect(): void {
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+
     if (this.ws) {
       this.ws.onclose = null
       this.ws.close()

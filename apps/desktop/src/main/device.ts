@@ -12,7 +12,16 @@ export interface DeviceConfig {
   privateKey: string
 }
 
-export const createDeviceKeys = () => {
+interface DeviceKeyPair {
+  publicKey: string
+  privateKey: string
+}
+
+interface CreateDeviceResponse {
+  data: string
+}
+
+export const createDeviceKeys = (): DeviceKeyPair => {
   return generateKeyPairSync('ed25519', {
     publicKeyEncoding: { type: 'spki', format: 'pem' },
     privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
@@ -26,18 +35,21 @@ export const getOrCreateDevice = async (): Promise<DeviceConfig> => {
   }
 
   const keys = createDeviceKeys()
-  const body = { public_key: keys.publicKey }
-  const res = await api.post("/duckdesk-api/create-device", body)
+  const response = await api.post('/duckdesk-api/create-device', {
+    public_key: keys.publicKey
+  })
+  const result = (await response.json()) as CreateDeviceResponse
 
-  const result = await res.json()
-  const deviceId = result.data
+  if (typeof result.data !== 'string' || result.data.length === 0) {
+    throw new Error('The DuckDesk server did not return a valid device ID.')
+  }
 
   const config: DeviceConfig = {
-    deviceId,
+    deviceId: result.data,
     publicKey: keys.publicKey,
     privateKey: keys.privateKey
   }
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2))
 
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2))
   return config
 }

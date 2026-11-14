@@ -1,8 +1,8 @@
 import { db } from "../config/db.js"
 import { randomInt } from "node:crypto"
 
-export const createDeviceId =  async(publicKey: string) => {
-     for (let attempt = 0; attempt < 10; attempt++) {
+export const createDeviceId = async (publicKey: string) => {
+  for (let attempt = 0; attempt < 10; attempt++) {
     const deviceId = String(randomInt(100_000_000, 1_000_000_000))
 
     try {
