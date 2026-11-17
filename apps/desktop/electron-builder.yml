@@ -9,8 +9,15 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!dist/**'
+  - '!dist-quality/**'
+  - '!quality-dist/**'
+  - '!duckdesk-win64*.zip'
 asarUnpack:
   - resources/**
+extraResources:
+  - from: resources/input-helper.exe
+    to: input-helper.exe
 win:
   executableName: desktop
 nsis:

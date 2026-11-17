@@ -1,10 +1,7 @@
-import duckHero from '../../assets/duckdesk-hero.png'
-import { SparklesIcon } from '../Icons'
-
 export function WelcomeHero(): React.JSX.Element {
   return (
     <section className="rise relative overflow-hidden rounded-[28px] bg-[#fffdf7] shadow-xs">
-      <div className="hero-aurora pointer-events-none absolute inset-0" aria-hidden="true" />
+      {/* <div className="hero-aurora pointer-events-none absolute inset-0" aria-hidden="true" />
       <div
         className="dot-grid pointer-events-none absolute inset-y-0 right-0 w-1/2 opacity-50 [mask-image:linear-gradient(to_left,black,transparent)]"
         aria-hidden="true"
@@ -45,7 +42,7 @@ export function WelcomeHero(): React.JSX.Element {
             aria-hidden="true"
           />
         </div>
-      </div>
+      </div> */}
     </section>
   )
 }

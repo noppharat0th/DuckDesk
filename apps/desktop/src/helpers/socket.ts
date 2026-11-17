@@ -1,5 +1,3 @@
-import { WSS_URL } from '../config'
-
 export interface SignalingPayload {
   action:
     | 'request-connect'
@@ -30,6 +28,7 @@ type OutgoingMessage =
 
 class SignalingService {
   private ws: WebSocket | null = null
+  private url = ''
   private deviceId = ''
   private onSignal?: SignalCallback
   private onStatusChange?: StatusCallback
@@ -38,11 +37,13 @@ class SignalingService {
 
   connect(
     deviceId: string,
+    url: string,
     onSignal?: SignalCallback,
     onStatusChange?: StatusCallback,
     onError?: ErrorCallback
   ): void {
     this.deviceId = deviceId
+    this.url = url
     this.onSignal = onSignal
     this.onStatusChange = onStatusChange
     this.onError = onError
@@ -65,7 +66,12 @@ class SignalingService {
     }
 
     try {
-      const ws = new WebSocket(WSS_URL)
+      if (!this.url) {
+        this.onStatusChange?.(false)
+        return
+      }
+
+      const ws = new WebSocket(this.url)
       this.ws = ws
 
       ws.onopen = () => {

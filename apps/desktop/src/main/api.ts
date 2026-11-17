@@ -1,9 +1,7 @@
-import { CLOUDFLARE_URL } from '../config'
-
-const DEFAULT_API_URL = 'http://127.0.0.1:8000'
+import { getServerUrl } from './server-url'
 
 export const getBaseUrl = async (): Promise<string> => {
-  return process.env.CLOUDFLARE_URL || CLOUDFLARE_URL || DEFAULT_API_URL
+  return getServerUrl()
 }
 
 export const request = async (

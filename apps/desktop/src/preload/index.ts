@@ -13,11 +13,14 @@ const api = {
     ipcRenderer.invoke('get-screen-sources'),
   getScreenResolution: (): Promise<{ width: number; height: number }> =>
     ipcRenderer.invoke('get-screen-resolution'),
+  getServerConfig: (): Promise<{ baseUrl: string; wsUrl: string }> =>
+    ipcRenderer.invoke('get-server-config'),
   remoteMouseMove: (data: { x: number; y: number }): Promise<void> =>
     ipcRenderer.invoke('remote-mouse-move', data),
   remoteMouseClick: (data: {
     button: 'left' | 'right' | 'middle'
     double?: boolean
+    action?: 'click' | 'down' | 'up'
   }): Promise<void> => ipcRenderer.invoke('remote-mouse-click', data),
   remoteMouseScroll: (data: { deltaY: number }): Promise<void> =>
     ipcRenderer.invoke('remote-mouse-scroll', data),

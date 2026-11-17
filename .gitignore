@@ -6,3 +6,11 @@ out/
 build/
 
 .vscode
+\
+*.log
+*.pid
+.tmp-asar
+build.ps1
+control-dist
+quality-dist
+test-dist

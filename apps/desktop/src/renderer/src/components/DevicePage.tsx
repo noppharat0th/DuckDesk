@@ -158,12 +158,17 @@ function DevicePage(): React.JSX.Element {
             await window.api.remoteMouseMove({ x: event.x, y: event.y })
             break
           case 'mousedown':
-            await window.api.remoteMouseClick({ button: event.button })
+            await window.api.remoteMouseClick({ button: event.button, action: 'down' })
             break
           case 'mouseup':
+            await window.api.remoteMouseClick({ button: event.button, action: 'up' })
             break
           case 'dblclick':
-            await window.api.remoteMouseClick({ button: event.button, double: true })
+            await window.api.remoteMouseClick({
+              button: event.button,
+              action: 'click',
+              double: true
+            })
             break
           case 'wheel':
             await window.api.remoteMouseScroll({ deltaY: event.deltaY })
@@ -195,11 +200,19 @@ function DevicePage(): React.JSX.Element {
 
     window.api
       .getMyDevice()
-      .then((device) => {
+      .then(async (device) => {
         setDeviceId(device.deviceId)
+
+        let wsUrl = ''
+        try {
+          wsUrl = (await window.api.getServerConfig()).wsUrl
+        } catch (error) {
+          console.error('[ServerURL]', error)
+        }
 
         socket.connect(
           device.deviceId,
+          wsUrl,
           async (fromId, payload) => {
             try {
               if (payload.action === 'request-connect') {
@@ -395,11 +408,7 @@ function DevicePage(): React.JSX.Element {
     <div className="relative flex h-screen overflow-hidden bg-gray-50 text-ink">
       <div className="drag-strip absolute inset-x-0 top-0 z-40 h-10" aria-hidden="true" />
 
-      <AppSidebar
-        activeView={view}
-        onNavigate={setView}
-        recentCount={recentSessions.length}
-      />
+      <AppSidebar activeView={view} onNavigate={setView} recentCount={recentSessions.length} />
 
       <main ref={scrollRef} className="min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[1200px] px-5 pb-6 pt-11 sm:px-6 lg:px-6">

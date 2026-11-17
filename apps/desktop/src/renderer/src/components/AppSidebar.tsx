@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  ArrowRightIcon,
+  // ArrowRightIcon,
   ChevronRightIcon,
   ComputersIcon,
-  CrownIcon,
+  // CrownIcon,
   HomeIcon,
   RemoteControlIcon,
   SessionsIcon,
@@ -43,7 +43,6 @@ export function AppSidebar({
       return false
     }
   })
-  const [proNoticeVisible, setProNoticeVisible] = useState(false)
   const noticeTimer = useRef<number | null>(null)
 
   useEffect(() => {
@@ -59,12 +58,6 @@ export function AppSidebar({
       if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current)
     }
   }, [])
-
-  const showProNotice = (): void => {
-    if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current)
-    setProNoticeVisible(true)
-    noticeTimer.current = window.setTimeout(() => setProNoticeVisible(false), 2400)
-  }
 
   return (
     <aside

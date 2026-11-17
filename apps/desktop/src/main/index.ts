@@ -5,6 +5,16 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { windowChrome } from '../shared/window-chrome'
 import { getOrCreateDevice } from './device'
+import { getServerUrl, toWebSocketUrl } from './server-url'
+import {
+  disposeInputHelper,
+  keyPress,
+  mouseButton,
+  mouseClick,
+  mouseMove,
+  mouseScroll,
+  typeText
+} from './input'
 
 const LOG_PATH = join(app.getPath('userData'), 'duckdesk.log')
 
@@ -170,6 +180,46 @@ app
       return { width: primary.size.width, height: primary.size.height }
     })
 
+    ipcMain.handle('get-server-config', () => {
+      const baseUrl = getServerUrl()
+      return { baseUrl, wsUrl: toWebSocketUrl(baseUrl) }
+    })
+
+    // Input injection (Windows SendInput via the native helper).
+    ipcMain.handle('remote-mouse-move', (_event, data: { x: number; y: number }) => {
+      if (Number.isFinite(data?.x) && Number.isFinite(data?.y)) mouseMove(data.x, data.y)
+    })
+
+    ipcMain.handle(
+      'remote-mouse-click',
+      (
+        _event,
+        data: {
+          button: 'left' | 'right' | 'middle'
+          double?: boolean
+          action?: 'click' | 'down' | 'up'
+        }
+      ) => {
+        if (!data?.button) return
+        if (data.action === 'down') mouseButton(data.button, true)
+        else if (data.action === 'up') mouseButton(data.button, false)
+        else mouseClick(data.button, Boolean(data.double))
+      }
+    )
+
+    ipcMain.handle('remote-mouse-scroll', (_event, data: { deltaY: number }) => {
+      if (Number.isFinite(data?.deltaY)) mouseScroll(data.deltaY)
+    })
+
+    ipcMain.handle('remote-key-press', (_event, data: { key: string; modifiers?: string[] }) => {
+      if (typeof data?.key !== 'string') return
+      keyPress(data.key, Array.isArray(data.modifiers) ? data.modifiers : [])
+    })
+
+    ipcMain.handle('remote-type-text', (_event, data: { text: string }) => {
+      if (typeof data?.text === 'string') typeText(data.text)
+    })
+
     createWindow()
   })
   .catch((error) => {
@@ -189,5 +239,6 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  disposeInputHelper()
   log('before-quit')
 })

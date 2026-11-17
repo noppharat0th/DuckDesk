@@ -11,9 +11,18 @@ const RTC_CONFIG: RTCConfiguration = {
 }
 
 export async function captureScreen(): Promise<MediaStream> {
+  let displaySize = { width: 1920, height: 1080 }
+  try {
+    displaySize = await window.api.getScreenResolution()
+  } catch {
+    // Keep the common 1080p fallback if the display query fails.
+  }
+
   try {
     return await navigator.mediaDevices.getDisplayMedia({
       video: {
+        width: { ideal: displaySize.width },
+        height: { ideal: displaySize.height },
         frameRate: { ideal: 30, max: 30 }
       },
       audio: false
@@ -131,9 +140,17 @@ class WebRTCManager {
     if (!sender) return
     try {
       const params = sender.getParameters()
+      // Screen content needs resolution more than a stable frame rate. Without
+      // this, WebRTC often downscales 1080p to a blurry 720p/540p stream.
+      const sendParams = params as RTCRtpSendParameters & {
+        degradationPreference?: RTCDegradationPreference
+      }
+      sendParams.degradationPreference = 'maintain-resolution'
+
       params.encodings = params.encodings?.length ? params.encodings : [{}]
-      params.encodings[0].maxBitrate = 4_000_000
+      params.encodings[0].maxBitrate = 8_000_000
       params.encodings[0].maxFramerate = 30
+      params.encodings[0].scaleResolutionDownBy = 1
       await sender.setParameters(params)
     } catch {
       // Sender tuning is best-effort; the stream still works without it.
